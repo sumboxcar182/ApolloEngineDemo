@@ -74,15 +74,18 @@ namespace Example
 
             result.EnrichWithApolloTracing(start);
 
-            SendResultToApollo(result);
+            SendResultToApollo(result, start);
 
             await WriteResponseAsync(context, result);
         }
 
-        private void SendResultToApollo(ExecutionResult result)
+        private void SendResultToApollo(ExecutionResult result, DateTime start)
         {
             //var traceResult = result.Extensions.
             var traceQueries = new Dictionary<string, Traces>();
+            
+            var trace = ConvertApolloTrace(result, start);
+
             var sampleTrace = new Trace()
             {
                 EndTime = DateTime.UtcNow,
@@ -90,6 +93,7 @@ namespace Example
                 ClientName = "c1",
                 ClientVersion = "v1",
             };
+
             var traces = new Traces();
             traces.trace.Add(sampleTrace);
 
@@ -99,16 +103,48 @@ namespace Example
                 Header = new ReportHeader()
                     {
                         Hostname = "www.example.com",
-                        SchemaTag = "staging"
+                        SchemaTag = "current"
                     }
             };
 
-            traceReport.TracesPerQueries.Add("# Foo\nquery Foo { user { email } }", traces);
-            using (Stream file = File.Create("test.txt"))
+            traceReport.TracesPerQueries.Add(result.Query, traces);
+            using (Stream file = File.Create("newTest.txt"))
             {
                 Serializer.Serialize(file, traceReport);
                 file.Close();
             }
+        }
+
+        private Trace ConvertApolloTrace(ExecutionResult result, DateTime start)
+        {
+            var perf = result?.Perf;
+            if (perf == null)
+            {
+                return null;
+            }
+
+            var rawTrace = ApolloTracingExtensions.CreateTrace(result.Operation, perf, start);
+
+            var trace = new Trace();
+            trace.StartTime = rawTrace.StartTime;
+            trace.EndTime = rawTrace.EndTime;
+            trace.DurationNs = (ulong)rawTrace.Duration;
+            trace.OriginReportedDurationNs = (ulong)rawTrace.Validation.Duration;
+
+            foreach (var resolver in rawTrace.Execution.Resolvers)
+            {
+                var root = new Trace.Node();
+
+                root.ParentType = resolver.ParentType;
+                root.OriginalFieldName = resolver.FieldName;
+                root.ResponseName = resolver.FieldName;
+                root.StartTime = (ulong)resolver.StartOffset;
+                root.Type = resolver.ReturnType;
+
+                trace.Root = root;
+            }
+
+            return trace;
         }
 
         private async Task WriteResponseAsync(HttpContext context, ExecutionResult result)
