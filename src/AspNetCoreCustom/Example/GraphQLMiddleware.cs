@@ -96,7 +96,7 @@ namespace Example
             };
 
             var traces = new Traces();
-            traces.trace.Add(sampleTrace);
+            traces.trace.Add(trace);
 
 
             var traceReport = new FullTracesReport()
@@ -108,7 +108,8 @@ namespace Example
             };
 
             var rawQuery = Regex.Replace(result.Document.OriginalQuery, @"\t|\n|\r", "");
-            var query = "# Foo\n" + rawQuery;
+            var operationName = result.Document.Operations.First().Name;
+            var query = "# " + operationName + "\n" + rawQuery;
 
 
 
