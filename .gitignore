@@ -329,3 +329,4 @@ ASALocalRun/
 # MFractors (Xamarin productivity tool) working folder 
 .mfractor/
 src/AspNetCoreCustom/Example/test.txt
+src/AspNetCoreCustom/Example/newTest.txt

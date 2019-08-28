@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using GraphQL;
 using GraphQL.Http;
@@ -102,12 +103,18 @@ namespace Example
             {
                 Header = new ReportHeader()
                     {
-                        Hostname = "www.example.com",
                         SchemaTag = "current"
                     }
             };
 
-            traceReport.TracesPerQueries.Add(result.Query, traces);
+            var rawQuery = Regex.Replace(result.Document.OriginalQuery, @"\t|\n|\r", "");
+            var query = "# Foo\n" + rawQuery;
+
+
+
+            //traceReport.TracesPerQueries.Add(rawQuery.ToString(), traces);
+            //traceReport.TracesPerQueries.Add("# HeroQuery\nquery HeroQuery { hero { id } }", traces);
+            traceReport.TracesPerQueries.Add(query, traces);
             using (Stream file = File.Create("newTest.txt"))
             {
                 Serializer.Serialize(file, traceReport);
