@@ -8,6 +8,7 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using static mdg.engine.proto.Trace;
 
 namespace Example.Tracing
 {
@@ -18,15 +19,17 @@ namespace Example.Tracing
         {
             var traceResult = GetApolloTraceMetrics(result.Extensions);
             var traceQueries = new Dictionary<string, Traces>();
-            var sampleTrace = new Trace()
+            var root = GetRootNode(traceResult.Execution);
+            var trace = new Trace
             {
                 EndTime = traceResult.EndTime,
                 StartTime = traceResult.StartTime,
                 ClientName = "c1",
                 ClientVersion = "v1",
+                Root = root
             };
             var traces = new Traces();
-            traces.trace.Add(sampleTrace);
+            traces.trace.Add(trace);
 
 
             var traceReport = new FullTracesReport()
@@ -38,16 +41,44 @@ namespace Example.Tracing
                 }
             };
 
-            traceReport.TracesPerQueries.Add("# Foo\nquery Foo { user { email } }", traces);
+            var traceName = $"# {result.Operation.Name}\n{result.Query}";
 
-            await PostDataToApolloEngine(traceReport);
+            //traceReport.TracesPerQueries.Add("# Foo\nquery Foo { user { email } }", traces);
+            traceReport.TracesPerQueries.Add(traceName, traces);
 
-            using (Stream file = File.Create("test.txt"))
+            if (result.Operation.Name.ToString()!= "IntrospectionQuery")
             {
-                file.Close();
+                await PostDataToApolloEngine(traceReport);
             }
 
             return true;
+        }
+
+        private static Node GetRootNode(ApolloTrace.ExecutionTrace execution)
+        {
+            var rootNode = new Node();
+            rootNode.ParentType = "query";
+
+            foreach(var resolver in execution.Resolvers)
+            {
+                rootNode.Childs.Add(GetResolverNode(resolver));
+            }
+
+            return rootNode;
+        }
+
+        private static Node GetResolverNode(ApolloTrace.ResolverTrace resolver)
+        {
+            var endTime = resolver.StartOffset + resolver.Duration;
+
+            return new Node()
+            {
+                ParentType = resolver.ParentType,
+                StartTime = (ulong)resolver.StartOffset,
+                EndTime = (ulong)endTime,
+                Type = resolver.ReturnType,
+                ResponseName = resolver.ReturnType,
+            };
         }
 
         private static async Task PostDataToApolloEngine(FullTracesReport traceReport)
@@ -61,12 +92,12 @@ namespace Example.Tracing
                 };
                 client.DefaultRequestHeaders.Add("User-Agent", "apollo-engine-reporting");
                 client.DefaultRequestHeaders.Add("X-Api-Key", "service:TracingDemo-2351:d7aPwnVfRZjuTrOmp1XF4g");
-                client.DefaultRequestHeaders.Add("Content-Type", "application/x-protobuf");
 
                 var byteArrayContent = new ByteArrayContent(stream.ToArray());
                 byteArrayContent.Headers.ContentType = new MediaTypeHeaderValue("application/x-protobuf");
 
                 var result = await client.PostAsync("api/ingress/traces", byteArrayContent);
+                var statusCode = result.StatusCode;
             }
         }
 
