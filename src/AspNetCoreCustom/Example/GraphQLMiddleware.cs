@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Example.Tracing;
 using GraphQL;
 using GraphQL.Http;
 using GraphQL.Instrumentation;
@@ -74,41 +75,9 @@ namespace Example
 
             result.EnrichWithApolloTracing(start);
 
-            SendResultToApollo(result);
+            await ApolloTraceBuilder.SendResultToApollo(result);
 
             await WriteResponseAsync(context, result);
-        }
-
-        private void SendResultToApollo(ExecutionResult result)
-        {
-            //var traceResult = result.Extensions.
-            var traceQueries = new Dictionary<string, Traces>();
-            var sampleTrace = new Trace()
-            {
-                EndTime = DateTime.UtcNow,
-                StartTime = DateTime.UtcNow.AddSeconds(2),
-                ClientName = "c1",
-                ClientVersion = "v1",
-            };
-            var traces = new Traces();
-            traces.trace.Add(sampleTrace);
-
-
-            var traceReport = new FullTracesReport()
-            {
-                Header = new ReportHeader()
-                    {
-                        Hostname = "www.example.com",
-                        SchemaTag = "staging"
-                    }
-            };
-
-            traceReport.TracesPerQueries.Add("# Foo\nquery Foo { user { email } }", traces);
-            using (Stream file = File.Create("test.txt"))
-            {
-                Serializer.Serialize(file, traceReport);
-                file.Close();
-            }
         }
 
         private async Task WriteResponseAsync(HttpContext context, ExecutionResult result)
